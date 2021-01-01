@@ -347,6 +347,47 @@ class chemf:
 
         return valid_con, valid_val, valid_all
 
+
+    def ConstraintStat(self, adj):
+        """
+            Counts the number of 3-member cycles and cycles with triple bond
+        :param adj: generated weighted adjacecny matrix
+        :return: number of 3-member cycles and cycles with triple bond
+        """
+
+        # -- 3-member cycles
+        with torch.no_grad():
+            W = adj.clone().float()
+
+        W[W == 2] = 1
+        W[W == 3] = 1
+
+        A_i = W.clone()
+        for i in range(2):
+            A_i = torch.bmm(W, A_i)
+
+        res_1 = torch.einsum('bii->b', A_i) / 6.
+
+        # -- cycles with triple bond
+        with torch.no_grad():
+            A = adj.clone()
+            D = adj.clone()
+
+        b_dim = A.shape[0]
+        D[D == 1] = D[D == 2] = 0
+
+        C = torch.empty(b_dim, self.n_max_atom, self.n_max_atom, device=self.device)
+        nI = self.n_max_atom * torch.eye(self.n_max_atom, device=self.device).unsqueeze(0).repeat(b_dim, 1, 1)
+        for i in range(self.n_max_atom):
+            for j in range(i, self.n_max_atom):
+                B = A.clone()
+                B[:, i, j] = B[:, j, i] = 0
+                C[:, i, j] = C[:, j, i] = torch.inverse(nI - B)[:, i, j]
+
+        res_2 = torch.sum(torch.einsum('bij,bij->bij', D, C), (2, 1))
+
+        return np.count_nonzero(res_1.cpu().numpy()), np.count_nonzero(res_2.cpu().numpy())
+
     def StructStat(self, dataset_smiles):
         """
             Computes the percentage of various functional groups in the data.

@@ -332,7 +332,6 @@ class chemf:
 
         return valid_con, valid_val, valid_all
 
-
     def ConstraintStat(self, adj):
         """
             Counts the number of 3-member cycles and cycles with triple bond
@@ -612,16 +611,28 @@ class chemf:
         grid_adj = torch.argmax(grid_samples[1], dim=3)
         grid_adj = grid_adj - torch.diag_embed(torch.einsum('...ii->...i', grid_adj))
 
+        with torch.no_grad():
+            with open(self.res_dir + '/grid.data', 'wb') as f:
+                pickle.dump(grid_sig.clone(), f)
+                pickle.dump(grid_adj.clone(), f)
+                pickle.dump(grid_2D.clone(), f)
+
         grid_mols = self.MolFromSample(grid_sig, grid_adj)  # valid grid mol objects
-        valid_grid_mols, valid_grid_2D = self.QualityMetrics(grid_mols, grid_2D)
-        props, bounds = self.ChemProperty(valid_grid_mols)
+        valid_grid_mols, valid_grid_2D = self.QualityMetrics(grid_mols, grid_2D, grid_adj)
+        props = {'Rings':[], 'SP3':[], 'PSA':[], 'MolWt':[]}
+        for mol in valid_grid_mols:
+            props['Rings'].append(Chem.rdMolDescriptors.CalcNumRings(mol))
+            props['SP3'].append(Chem.rdMolDescriptors.CalcFractionCSP3(mol))
+            props['PSA'].append(Descriptors.TPSA(mol))
+            props['MolWt'].append(Descriptors.MolWt(mol))
 
         # -- plot property maps
-        for idx, (prop, bound) in enumerate(zip(props, bounds)):
+        for idx, prp in enumerate(list(props.keys())):
             plt.figure(idx)
             f, ax = plt.subplots()
 
-            X0p, X1p, Zp = self.GPRegress(valid_grid_2D.T[0], valid_grid_2D.T[1], prop)
+            # -- make grid with GP interpolation
+            X0p, X1p, Zp = self.GPRegress(valid_grid_2D.T[0], valid_grid_2D.T[1], props[prp])
 
             im = plt.contour(X0p, X1p, Zp)
             im2 = plt.contourf(X0p, X1p, Zp, alpha=0.3)
@@ -629,7 +640,7 @@ class chemf:
             plt.clabel(im, inline=1, fontsize=10, fmt='%1.0f')
             plt.colorbar()
             f.tight_layout()
-            f.savefig(self.res_dir + '/latn_comp_smooth_prop_' + str(idx), bbox_inches='tight')
+            f.savefig(self.res_dir + '/latn_comp_smooth_' + prp, bbox_inches='tight')
             plt.close()
 
     def ChemSpace(self, valid_mol):

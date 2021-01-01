@@ -197,10 +197,15 @@ class tools:
         self.pltIter('/loss_tot_' + str(idx), train_hist['Tl'], [-0.5, 150])
         self.pltIter('/loss_rec_' + str(idx), train_hist['RC'])
         self.pltIter('/loss_kld_' + str(idx), train_hist['KL'])
-        if self.mu_reg_1 != 0.0:
+        if self.reg_flag[0]:
             self.pltIter('/loss_rg1_' + str(idx), train_hist['R1'], [-0.5, 10])
-        if self.mu_reg_2 != 0.0:
+        if self.reg_flag[1]:
             self.pltIter('/loss_rg2_' + str(idx), train_hist['R2'], [-0.5, 10])
+        if self.reg_flag[2]:
+            self.pltIter('/loss_rg3_' + str(idx), train_hist['R3'], [-0.5, 10])
+        if self.reg_flag[3]:
+            self.pltIter('/loss_rg4_' + str(idx), train_hist['R4'], [-0.5, 10])
+
         self.pltIter('/l_ELBO' + str(idx), - (np.array(train_hist['RC']) + np.array(train_hist['KL'])))
 
     def HistStat(self, mol_lis, n_bins=15):

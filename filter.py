@@ -10,9 +10,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from torch import nn
+from rdkit import Chem
 from sklearn.decomposition import PCA
 from scipy.interpolate import interp1d
-
+from rdkit.Chem import Descriptors
 
 class kernel:
     def __init__(self, K, R, d, M, gamma, omega=None):
@@ -65,7 +66,7 @@ class scattering(nn.Module):
 
         # -- graph parameters
         self.n_node = args.n_node
-        self.n_atom_features = args.n_atom_type
+        self.n_atom_features = args.n_scat_atom_features
 
         # -- scattering parameters
         self.Ns = args.wlt_scales
@@ -226,13 +227,12 @@ def parse_args():
     parser.add_argument('--gpu_mode', type=int, default=1, help='Accelerate the script using GPU.')
     parser.add_argument('--wlt_scales', type=int, default=8, help='Number of filters in the spectral domain.')
     parser.add_argument('--scat_layers', type=int, default=3, help='Number of layers in the scattering network.')
-    parser.add_argument('--N', type=int, default=100, help='Number of training data.')
+    parser.add_argument('--N', type=int, default=600, help='Number of training data.')
     parser.add_argument('--database', type=str, default='QM9', help='Training database name.')
 
-    parser.add_argument('--loadtrainedmodel', type=str, default='', help='dummy.')
-    parser.add_argument('--n_samples', type=int, default=4000, help='dummy.')
-
     args = parser.parse_args()
+
+    args.loadtrainedmodel = args.n_samples = 0
 
     # -- scattering
     args.sdim = 0
@@ -246,10 +246,11 @@ def parse_args():
     os.makedirs(args.res_dir)
 
     # -- dataset specification
-    if args.database == 'QM9':
-        args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
-        args.n_node = 9
-        args.n_atom_type = 5
+    args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
+    args.n_node = 9
+    args.n_atom_type = 5
+
+    args.n_scat_atom_features = args.n_atom_type
 
     args.data_dir = os.path.join(dir_, 'data/' + args.database + '_0.data')
     args.n_bond_type = 4
@@ -322,7 +323,7 @@ def main():
     plt.close()
 
     # -- perform scattering transform
-    N = 100000
+    N = 80000
     prp = {}
     with open(args.data_dir, 'rb') as f:
         smiles = pickle.load(f)[:N]
@@ -331,8 +332,8 @@ def main():
         for i in range(3):
             prp[str(i)] = torch.Tensor(pickle.load(f)[:N])
 
-    signal_in = torch.transpose(signal.reshape(-1, args.n_node, args.n_atom_type), 2, 1)
-    scat_out = scat(adjacency, signal_in).reshape(-1, args.sdim * args.n_atom_type)
+    signal_in = torch.transpose(signal.reshape(-1, args.n_node, args.n_scat_atom_features), 2, 1)
+    scat_out = scat(adjacency, signal_in).reshape(-1, args.sdim * args.n_scat_atom_features)
 
     # -- store coefficients
     with open(args.res_dir + '/scat_out.data', 'wb') as f:

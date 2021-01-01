@@ -8,14 +8,16 @@ import pickle
 import datetime
 import argparse
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 
 from itertools import product
-from rdkit import Chem, RDLogger
 from torch.utils.data import Dataset
 from sklearn.decomposition import PCA
-from rdkit.Chem import Descriptors, Crippen, Draw
+from rdkit import Chem, DataStructs, RDLogger
+from sklearn.preprocessing import StandardScaler
 from sklearn.gaussian_process.kernels import Matern
+from rdkit.Chem import AllChem, Descriptors, Crippen, Draw
 from sklearn.gaussian_process import GaussianProcessRegressor
 
 from filter import scattering
@@ -30,16 +32,25 @@ class MolecularGraphDataset(Dataset):
             self.sig = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
             self.adj = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
 
-            self.prp_1 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
-            self.prp_2 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
-            self.prp_3 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
+            prp_1 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
+            prp_2 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
+            prp_3 = torch.Tensor(pickle.load(f))[idx_0:idx_0 + size]
+
+        props = np.vstack((prp_1, prp_2, prp_3)).T
+
+        # -- normalize data
+        scaler = StandardScaler()
+        scaler.fit(props)
+        self.props = torch.Tensor(scaler.transform(props))
+        self.mean = scaler.mean_
+        self.var = scaler.var_
 
     def __len__(self):
         return len(self.smiles)
 
     def __getitem__(self, idx):
         sample = {'smiles': self.smiles[idx], 'signal': self.sig[idx], 'adjacency': self.adj[idx],
-                  'TPSA': self.prp_1[idx], 'MolWt': self.prp_2[idx], 'LogP': self.prp_3[idx]}
+                  'properties': self.props[idx]}
 
         return sample
 

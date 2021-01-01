@@ -37,6 +37,9 @@ class VAEgraph(object):
         for file in ['Tl', 'KL', 'RC', 'R1', 'R2', 'R3', 'R4']:
             self.train_hist[file] = []
 
+        self.y_id = args.y_id
+        self.y_target = args.y_target
+
         # -- model loading parameters
         self.filemodel = args.loadtrainedmodel
         self.loadmodel = bool(self.filemodel)
@@ -56,6 +59,16 @@ class VAEgraph(object):
         self.z_dim = args.z_dim
         self.TrainDataset = DataLoader(dataset=MGD(self.dataset_name, self.N, 0), batch_size=self.batch_size, shuffle=False)
         self.VisulDataset = DataLoader(dataset=MGD(self.dataset_name, self.N_vis, self.N), batch_size=self.N_vis, shuffle=False)
+
+        props = self.TrainDataset.dataset[:]['properties']
+
+        self.mean = self.TrainDataset.dataset.mean
+        self.var = self.TrainDataset.dataset.var
+
+        self.mu_prior = torch.mean(props, 0)
+        self.cov_prior = torch.tensor(np.cov(props.T)).float()
+
+        self.cond_dsgn = bool(self.y_target)
 
         self.model = VAEmod(args).to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
@@ -190,10 +203,13 @@ class VAEgraph(object):
         for batch_idx, (train_batch, weight_vec) in enumerate(zip(self.TrainDataset, self.weights_loader)):
             train_batch['signal'] = train_batch['signal'].to(self.device)
             train_batch['adjacency'] = train_batch['adjacency'].to(self.device)
+            props = None
+            if self.cond_dsgn:
+                props = train_batch['properties'].to(self.device)
 
             self.optimizer.zero_grad()
 
-            [rec_sig, rec_adj], mu, logvar, [reg_sig, reg_adj] = self.model(train_batch['signal'], train_batch['adjacency'])
+            [rec_sig, rec_adj], mu, logvar, [reg_sig, reg_adj] = self.model(train_batch['signal'], train_batch['adjacency'], props)
             loss = self.loss_function(rec_sig, rec_adj, weight_vec, train_batch['signal'], train_batch['adjacency'], reg_sig, reg_adj, mu, logvar)
             loss.backward()
             train_loss += loss.item()
@@ -205,6 +221,7 @@ class VAEgraph(object):
     def train(self, weights, model_name = '/model.pth'):
 
         if not self.loadmodel:
+
             self.weights_loader = DataLoader(weights.to(self.device), batch_size=self.batch_size, shuffle=False)
             for epoch in range(1, self.epochs + 1):
                 self.trainepoch(epoch)
@@ -226,10 +243,39 @@ class VAEgraph(object):
 
     def get_samples(self, sample_name='/samples.data'):
         self.model.eval()
+
+        if self.cond_dsgn:
+            y_target = (self.y_target - self.mean[self.y_id]) / np.sqrt(self.var[self.y_id])
+
         with torch.no_grad():
             sample_z = torch.randn((self.n_samples, self.z_dim), device=self.device)
 
-        samplesTorch = self.model.decode(sample_z)
+            if self.cond_dsgn:
+
+                # -- conditional generation
+                id2 = [self.y_id]
+                id1 = np.setdiff1d([0, 1, 2], id2)
+
+                mu1 = self.mu_prior[id1]
+                mu2 = self.mu_prior[id2]
+
+                cov11 = self.cov_prior[id1][:, id1]
+                cov12 = self.cov_prior[id1][:, id2]
+                cov22 = self.cov_prior[id2][:, id2]
+                cov21 = self.cov_prior[id2][:, id1]
+
+                cond_mu = np.transpose(mu1.T + np.matmul(cov12, np.linalg.inv(cov22)) * (y_target - mu2))[0]
+                cond_cov = cov11 - np.matmul(np.matmul(cov12, np.linalg.inv(cov22)), cov21)
+
+                sample_y = torch.empty(self.n_samples, 3)
+                sample_y[:, id1] = torch.distributions.multivariate_normal.MultivariateNormal(cond_mu, cond_cov).sample(
+                    (self.n_samples,))
+                sample_y[:, id2] = y_target
+
+        if self.cond_dsgn:
+            samplesTorch = self.model.decode(torch.cat((sample_z, sample_y), dim=1))
+        else:
+            samplesTorch = self.model.decode(sample_z)
 
         with torch.no_grad():
             samples_sig = torch.argmax(samplesTorch[0], dim=2)

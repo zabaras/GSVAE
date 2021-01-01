@@ -3,6 +3,7 @@ Author: Navid Shervani-Tabar
 """
 import torch
 import pickle
+import numpy as np
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
@@ -27,10 +28,13 @@ class VAEgraph(object):
         self.vis = args.vis
         self.mu_reg_1 = args.mu_reg_1
         self.mu_reg_2 = args.mu_reg_2
+        self.mu_reg_3 = args.mu_reg_3
+        self.mu_reg_4 = args.mu_reg_4
         self.mu_fcn = 70
+        self.reg_flag = [bool(i != 0) for i in args.reg_vec]
 
         self.train_hist = {}
-        for file in ['Tl', 'KL', 'RC', 'R1', 'R2']:
+        for file in ['Tl', 'KL', 'RC', 'R1', 'R2', 'R3', 'R4']:
             self.train_hist[file] = []
 
         # -- model loading parameters
@@ -68,40 +72,78 @@ class VAEgraph(object):
         """
 
         # -- Constraint: Ghost Nodes and Valence
-        SM_f = nn.Softmax(dim=2)
-        SM_W = nn.Softmax(dim=3)
+        if self.reg_flag[0]:
+            SM_f = nn.Softmax(dim=2)
+            SM_W = nn.Softmax(dim=3)
 
-        p_f = SM_f(reg_sig)
-        p_W = SM_W(reg_adj)
+            p_f = SM_f(reg_sig)
+            p_W = SM_W(reg_adj)
 
-        h_vec = torch.arange(self.n_bond_features, device=self.device).float()
-        inner_sum = torch.einsum('i,bjki->bjk', h_vec, p_W)
-        V = (inner_sum - torch.diag_embed(torch.einsum('...ii->...i', inner_sum))).sum(2)
+            h_vec = torch.arange(self.n_bond_features, device=self.device).float()
+            inner_sum = torch.einsum('i,bjki->bjk', h_vec, p_W)
+            V = (inner_sum - torch.diag_embed(torch.einsum('...ii->...i', inner_sum))).sum(2)
 
-        valence_dict = torch.Tensor([4, 2, 3, 1, 0]).to(self.device)
-        U = torch.einsum('k,bjk->bj', valence_dict, p_f)
+            valence_dict = torch.Tensor([4, 2, 3, 1, 0]).to(self.device)
+            U = torch.einsum('k,bjk->bj', valence_dict, p_f)
 
-        reg_1 = torch.mean(torch.max(torch.zeros(U.size(), device=self.device), V - U).sum(1))
+            reg_1 = torch.mean(torch.max(torch.zeros(U.size(), device=self.device), V - U).sum(1))
+        else:
+            reg_1 = 0
 
         # -- Constraint: Connectivity
-        Sig = nn.Sigmoid()
+        if self.reg_flag[1]:
+            Sig = nn.Sigmoid()
 
-        q = 1 - p_f[:, :, 4]
-        A = 1 - p_W[:, :, :, 0]
+            q = 1 - p_f[:, :, 4]
+            A = 1 - p_W[:, :, :, 0]
 
-        A_0 = torch.eye(self.n_node).unsqueeze(0)
-        A_i = A
+            A = A - torch.diag_embed(torch.einsum('...ii->...i', A))
+            A_0 = torch.eye(self.n_node).unsqueeze(0)
+            A_i = A.clone()
 
-        B = A_0.repeat(reg_sig.size(0), 1, 1).to(self.device)
+            B = A_0.repeat(reg_sig.size(0), 1, 1).to(self.device)
 
-        for i in range(1, self.n_node):
-            A_i = Sig(100 * (torch.bmm(A_i, A) - 0.5))
-            B += A_i
+            for i in range(1, self.n_node):
+                A_i = Sig(100 * (torch.bmm(A, A_i) - 0.5))
+                B += A_i
 
-        C = Sig(100 * (B - 0.5))
-        reg_2 = 1./batch_dim*torch.sum( torch.einsum('ij,ik,ijk->ijk', q, q, 1 - 2 * C)+ C )
+            C = Sig(100 * (B - 0.5))
+            reg_2 = 1. / batch_dim * torch.sum(torch.einsum('ij,ik,ijk->ijk', q, q, 1 - 2 * C) + C)
+        else:
+            reg_2 = 0
 
-        return [reg_1, reg_2]
+        # -- Constraint: 3-member cycle
+        if self.reg_flag[2]:
+            A = 1 - p_W[:, :, :, 0]
+
+            A = A - torch.diag_embed(torch.einsum('...ii->...i', A))
+            A_i = A.clone()
+            for i in range(2):
+                A_i = torch.bmm(A, A_i)
+
+            reg_3 = 1. / batch_dim * torch.sum(torch.einsum('bii->b', A_i) / 6.)
+        else:
+            reg_3 = 0
+
+        # -- Constraint: Cycles with triple bonds
+        if self.reg_flag[3]:
+            A = 1 - p_W[:, :, :, 0]
+            D = p_W[:, :, :, 3]
+
+            C = torch.empty(batch_dim, self.n_node, self.n_node, device=self.device)
+            nI = self.n_node * torch.eye(self.n_node, device=self.device).unsqueeze(0).repeat(batch_dim, 1, 1)
+
+            for i in range(self.n_node):
+                for j in range(i, self.n_node):
+                    B = A.clone()
+                    B[:, i, j] = B[:, j, i] = 0
+                    C[:, i, j] = C[:, j, i] = torch.inverse(nI - B)[:, i, j]
+
+            reg_4 = 1. / batch_dim * torch.sum(torch.einsum('bij,bij->bij', D, C))
+        else:
+            reg_4 = 0
+
+        return [reg_1, reg_2, reg_3, reg_4]
 
     def loss_function(self, recon_sig, recon_adj, weight_vec, signal, adj, reg_sig, reg_adj, mu, logvar):
 
@@ -126,16 +168,18 @@ class VAEgraph(object):
         fcn_loss = 1./ self.n_node * torch.mean(fcn_loss_1, 1) + 2 * self.n_node ** 2 / (self.n_node * (self.n_node - 1)) * torch.mean(fcn_loss_2, [1, 2])
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
 
-        [reg_1, reg_2] = self.constraints(reg_sig, reg_adj, batch_dim)
+        [reg_1, reg_2, reg_3, reg_4] = self.constraints(reg_sig, reg_adj, batch_dim)
 
         loss = self.N / batch_dim * (self.mu_fcn * torch.dot(fcn_loss, weight_vec) + torch.dot(KLD, weight_vec)) + \
-               (self.mu_reg_1 * reg_1 + self.mu_reg_2 * reg_2)
+               (self.mu_reg_1 * reg_1 + self.mu_reg_2 * reg_2 + self.mu_reg_3 * reg_3 + self.mu_reg_4 * reg_4)
 
         self.train_hist['Tl'].append(loss)
         self.train_hist['RC'].append(self.N / batch_dim * self.mu_fcn * torch.dot(fcn_loss, weight_vec))
         self.train_hist['KL'].append(self.N / batch_dim * torch.dot(KLD, weight_vec))
         self.train_hist['R1'].append(self.mu_reg_1 * reg_1)
         self.train_hist['R2'].append(self.mu_reg_2 * reg_2)
+        self.train_hist['R3'].append(self.mu_reg_3 * reg_3)
+        self.train_hist['R4'].append(self.mu_reg_4 * reg_4)
 
         return loss
 

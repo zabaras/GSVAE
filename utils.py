@@ -317,8 +317,8 @@ class chemf:
         """
         with open(self.data_dir, 'rb') as f:
             self.train_data = pickle.load(f)[:self.N]
-            self.sig = torch.Tensor(pickle.load(f))[:self.N]
-            self.adj = torch.Tensor(pickle.load(f))[:self.N]
+            self.sig = torch.Tensor(pickle.load(f))[:self.N].to(self.device)
+            self.adj = torch.Tensor(pickle.load(f))[:self.N].to(self.device)
 
     def ValidityFilters(self):
         """

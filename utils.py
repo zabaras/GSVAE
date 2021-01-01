@@ -600,22 +600,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
 
     parser.add_argument('--BB_samples', type=int, default=25, help='Number of Bayesian bootstrap samples.')
-    parser.add_argument('--N', type=int, default=100, help='Number of training data for MWLE estimate.')
+    parser.add_argument('--N', type=int, default=600, help='Number of training data for MWLE estimate.')
     parser.add_argument('--database', type=str, default='QM9', help='Training database name.')
-    parser.add_argument('--ref_samples', type=str, default='samples_ref.data',
-                        help='Path to samples from the reference model.')
+    parser.add_argument('--sample_file', type=str, default='BB_600', help='Predictive samples directory.')
     parser.add_argument('--gpu_mode', type=int, default=0, help='Accelerate the script using GPU.')
 
-    parser.add_argument('--mu_reg_1', type=float, default=0., help='dummy.')
-    parser.add_argument('--mu_reg_2', type=float, default=0., help='dummy.')
-    parser.add_argument('--n_samples', type=int, default=4000, help='dummy.')
-    parser.add_argument('--z_dim', type=int, default=2, help='dummy.')
-    parser.add_argument('--loadtrainedmodel', type=str, default='', help='dummy.')
-    parser.add_argument('--wlt_scales', type=int, default=8, help='dummy.')
-    parser.add_argument('--scat_layers', type=int, default=3, help='dummy.')
-    parser.add_argument('--epochs', type=int, default=2000, help='dummy.')
-
     args = parser.parse_args()
+
+    args.scat_layers = args.n_samples = args.loadtrainedmodel = args.wlt_scales = args.mu_reg_1 = args.mu_reg_2 = \
+        args.z_dim = args.epochs = 0
 
     # -- scattering
     args.sdim = 0
@@ -632,13 +625,14 @@ def parse_args():
     args.sample_dir = os.path.join(dir, 'data/samples')
 
     # -- dataset specification
-    if args.database == 'QM9':
-        args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
-        args.n_node = 9
-        args.n_atom_type = 5
+    args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
+    args.n_node = 9
+    args.n_atom_type = 5
 
     args.data_dir = os.path.join(dir, 'data/' + args.database + '_0.data')
     args.n_bond_type = 4
+    args.n_scat_atom_features = args.n_atom_type
+    args.y_target = None
 
     # -- GPU settings
     args.device = torch.device('cuda' if (bool(args.gpu_mode) and torch.cuda.is_available()) else 'cpu')
@@ -658,36 +652,47 @@ def main():
     my_tools = tools(args)
     all_valid_mols = []
 
-    if not os.path.isdir(args.sample_dir):
+    store_quant = True
+    quant_name = 'quants_' + args.sample_file + '.data'
+
+    BB_dir = os.path.join(args.sample_dir, args.sample_file)
+    if not os.path.isdir(BB_dir):
         sys.tracebacklimit = 0
-        raise OSError('Samples not found. Put samples in ./data/samples/.')
+        raise OSError('Samples not found. Put samples in {}'.format(BB_dir))
 
-    if not os.path.isfile(os.path.join(args.sample_dir, args.ref_samples)):
-        sys.tracebacklimit = 0
-        raise OSError('Samples not found. Put reference sample ' + args.ref_samples +' in ./data/samples/.')
+    if store_quant:
+        # -- load samples
+        for i in range(1, args.BB_samples + 1):
+            valid_mol_set = chem.LoadMols(BB_dir + '/samples_' + str(i) + '.data')
+            all_valid_mols.append(valid_mol_set)
 
-    # -- reference
-    prob_ref, _, _ = my_tools.HistStat([chem.LoadMols(args.sample_dir + '/' + args.ref_samples)])
-
-    # -- load samples
-    for i in range(1, args.BB_samples + 1):
-        valid_mol_set = chem.LoadMols(args.sample_dir + '/samples_' + str(i) + '.data')
-        all_valid_mols.append(valid_mol_set)
-
-    # -- plot histograms
-    prob_all, bins_all, bounds = my_tools.HistStat(all_valid_mols)
+        # -- plot histograms
+        prob_all, bins_all, bounds = my_tools.HistStat(all_valid_mols)
+        quants = []
+    else:
+        with open(args.sample_dir + '/' + quant_name, 'rb') as f:
+            quants = pickle.load(f)
+            bins_all = pickle.load(f)
+            bounds = pickle.load(f)
     for k, bound in enumerate(bounds):
 
         # -- quantiles
-        quant = np.quantile(prob_all[str(k)], [0.05, 0.95], axis=1)
+        if store_quant:
+            quant = np.quantile(prob_all[str(k)], [0.05, 0.95], axis=1)
+            quants.append(quant)
+        else:
+            quant = quants[k]
         my_tools.ErrorBars(quant, bins_all[k], 'red')
-
-        # -- reference
-        my_tools.pltHist(bins_all[k], prob_ref[str(k)], clr='magenta', alph=.5, lw=1.5, fmt='-.')
 
         plt.grid(linestyle='--')
         plt.savefig(args.res_dir + '/error_bars_' + str(k), bbox_inches='tight')
         plt.close()
+
+    if store_quant:
+        with open(args.sample_dir + '/' + quant_name, 'wb') as f:
+            pickle.dump(quants, f)
+            pickle.dump(bins_all, f)
+            pickle.dump(bounds, f)
 
 if __name__ == '__main__':
     main()

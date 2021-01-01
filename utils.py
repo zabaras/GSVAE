@@ -429,7 +429,7 @@ class chemf:
 
         return lines
 
-    def QualityMetrics(self, mols, z, verbose=False):
+    def QualityMetrics(self, mols, z, adj, verbose=False):
         """
             Evaluates quality metrics for the generated molecules including validity, uniqueness, and novelty of the
             sample.
@@ -455,10 +455,18 @@ class chemf:
         line3 = "Novelty is {:.2%}. \n".format(
             np.array(list(map(lambda x: Chem.MolToSmiles(x) not in self.train_data, valid_mols))).mean())
 
+        # -- physical constraints stats
+        n_three_cycle, n_triple_cycle = self.ConstraintStat(adj)
+        line4 = "Number of 3-member cycles is: {}. \n".format(n_three_cycle)
+        line5 = "Number of cycles with triple bonds is: {}. \n".format(n_triple_cycle)
+
         if verbose:
-            print('\n', line1, line2, line3)
+            lines = self.StructStat(valid_set)
+            print('\n', line1, line2, line3, line4, line5)
+            print(*lines)
             file1 = open(self.res_dir + '/quality.txt', 'a')
-            file1.writelines([line1, line2, line3])
+            file1.writelines([line1, line2, line3, line4, line5])
+            file1.writelines(lines)
             file1.close()
 
         # -- filter valid latent representations and sanitize

@@ -60,8 +60,7 @@ class tools:
 
         # -- training parameters
         self.device = args.device
-        self.mu_reg_1 = args.mu_reg_1
-        self.mu_reg_2 = args.mu_reg_2
+        self.reg_flag = [bool(i != 0) for i in args.reg_vec]
 
         # -- graph parameters
         self.n_max_atom = args.n_node
@@ -73,6 +72,8 @@ class tools:
         self.z_dim = args.z_dim
         self.sdim = args.sdim
         self.data_dir = args.data_dir
+        self.cond_dsgn = bool(args.y_target)
+        self.n_scat_atom_features = args.n_scat_atom_features
 
         self.res_dir = args.res_dir
         self.chem = chemf(args)
@@ -93,8 +94,16 @@ class tools:
         N_vis = len(VisulData.dataset)
         signal = VisulData.dataset[:]['signal'].to(self.device)
         adjacency = VisulData.dataset[:]['adjacency'].to(self.device)
+        properties = VisulData.dataset[:]['properties'].to(self.device)
 
-        prop_dict = {0: 'TPSA', 1: 'MolWt', 2: 'LogP'}
+        my_properties = {'Rings': [], 'SP3': [], 'PSA': [], 'MolWt': []}
+        for smiles in VisulData.dataset[:]['smiles']:
+            mol = Chem.MolFromSmiles(smiles)
+            my_properties['Rings'].append(Chem.rdMolDescriptors.CalcNumRings(mol))
+            my_properties['SP3'].append(Chem.rdMolDescriptors.CalcFractionCSP3(mol))
+            my_properties['PSA'].append(Descriptors.TPSA(mol))
+            my_properties['MolWt'].append(Descriptors.MolWt(mol))
+
         steps = 10
 
         # -- concat training data
@@ -106,38 +115,13 @@ class tools:
         # -- encode inputs
         signal = signal.reshape(-1, self.n_max_atom, self.n_atom_features)
         signal_in = torch.transpose(signal, 2, 1)
-        mu, logvar = model.encode(self.scat(adjacency, signal_in).reshape(-1, self.sdim * self.n_atom_features))
-
-        # -- compute interpolated path
-        if EndPts is not None:
-            step = (mu[EndPts[1]] - mu[EndPts[0]]) / float(steps)
-            path = (mu[EndPts[0]]).unsqueeze(0)
-            for i in range(steps - 1):
-                path = torch.cat((path, (mu[EndPts[0]] + step * (i + 1)).unsqueeze(0)), dim=0)
-            path = torch.cat((path, mu[EndPts[1]].unsqueeze(0)), dim=0)
-
-            # -- decode interpolated path
-            pathTorch = model.decode(path[1:-1])
-
-            samples_path_sig = torch.argmax(pathTorch[0], dim=2)
-            samples_path_adj = torch.argmax(pathTorch[1], dim=3)
-            samples_path_adj = samples_path_adj - torch.diag_embed(torch.einsum('...ii->...i', samples_path_adj))
-
-            # -- add end point molecules
-            pathSig = torch.cat((torch.argmax(signal[EndPts[0]].unsqueeze(0), dim=2), samples_path_sig,
-                                 torch.argmax(signal[EndPts[1]].unsqueeze(0), dim=2)))
-            pathAdj = torch.cat((adjacency[EndPts[0]].unsqueeze(0), samples_path_adj.float(),
-                                 adjacency[EndPts[1]].unsqueeze(0)))
-            pathMol = self.chem.MolFromSample(pathSig, pathAdj)
-
-            # -- store interpolated molecules
-            self.chem.draw(pathMol, name='/path_', path=True)
+        if self.cond_dsgn:
+            signal_in = torch.cat((signal_in, properties.unsqueeze(2).repeat(1, 1, 9)), dim=1)
+        mu, logvar = model.encode(self.scat(adjacency, signal_in).reshape(-1, self.sdim * self.n_scat_atom_features))
 
         # -- project latent space to 2D
         pca = PCA(n_components=2)
         pca.fit(mu.cpu().detach().numpy())
-        if EndPts is not None:
-            mu = torch.cat((mu, path))
         latent_2D = pca.transform(mu.cpu().detach().numpy())
 
         # -- plot settings
@@ -150,8 +134,7 @@ class tools:
         ax.set_axisbelow(True)
 
         # -- plot 2D latent for epochs
-        plt.scatter(latent_2D[:N_vis, 0], latent_2D[:N_vis, 1], s=5,
-                    c=VisulData.dataset[:][prop_dict[1]].reshape(-1).data.cpu().numpy())
+        plt.scatter(latent_2D[:N_vis, 0], latent_2D[:N_vis, 1], s=5, c=np.array(my_properties['MolWt']))
         f.savefig(self.res_dir + '/latent_' + str(epoch), bbox_inches='tight')
 
         # -- plot final 2D latent with training data
@@ -161,16 +144,11 @@ class tools:
             f.savefig(self.res_dir + '/latent_train', bbox_inches='tight')
             res.remove()
 
-        # -- plot final 2D latent with interpolated path
-        if EndPts is not None:
-            plt.scatter(latent_2D[-(steps + 1):, 0], latent_2D[-(steps + 1):, 1], s=5, marker='o', c='m', alpha=0.3)
-            f.savefig(self.res_dir + '/latent_path', bbox_inches='tight')
-
         plt.close()
 
         # -- plot final 2D latent with each property
         if epoch == self.epochs:
-            for i in range(len(prop_dict)):
+            for i, prp in enumerate(list(my_properties.keys())):
                 # -- plot settings
                 plt.figure(i + 2)
                 f, ax = plt.subplots()
@@ -181,9 +159,11 @@ class tools:
                 ax.set_axisbelow(True)
 
                 # -- plot final 2D
-                plt.scatter(latent_2D[:N_vis, 0], latent_2D[:N_vis, 1], s=5,
-                            c=VisulData.dataset[:][prop_dict[i]].reshape(-1).data.cpu().numpy())
-                f.savefig(self.res_dir + '/latent_' + prop_dict[i], bbox_inches='tight')
+                if prp == 'Rings':
+                    plt.scatter(latent_2D[:N_vis, 0], latent_2D[:N_vis, 1], s=5, c=np.array(my_properties[prp][:N_vis]), vmin=0, vmax=4)
+                else:
+                    plt.scatter(latent_2D[:N_vis, 0], latent_2D[:N_vis, 1], s=5, c=np.array(my_properties[prp][:N_vis]))
+                f.savefig(self.res_dir + '/latent_' + prp, bbox_inches='tight')
 
                 plt.close()
 

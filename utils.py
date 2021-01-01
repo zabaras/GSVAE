@@ -347,6 +347,47 @@ class chemf:
 
         return valid_con, valid_val, valid_all
 
+    def StructStat(self, dataset_smiles):
+        """
+            Computes the percentage of various functional groups in the data.
+        :param dataset_smiles: list of SMILES representations of the data.
+        :return:
+        """
+
+        FG = {
+            'Acetylenic carbon': '[$([CX2]#C)]',
+            'Aldehyde         ': '[CX3H1](=O)[#6]',
+            'Alkyl carbon     ': '[CX4]',
+            'Amide            ': '[NX3][CX3](=[OX1])[#6]',
+            'Amino acid       ': '[NX3,NX4+][CX4H]([*])[CX3](=[OX1])[O,N]',
+            'Carbonyl         ': '[$([CX3]=[OX1]),$([CX3+]-[OX1-])]',
+            'Carboxylic acid  ': '[CX3](=O)[OX1H0-,OX2H1]',
+            'Ester            ': '[#6][CX3](=O)[OX2H0][#6]',
+            'Ether            ': '[OD2]([#6])[#6]',
+            'Halide           ': '[#6][F,Cl,Br,I]',
+            'Hydrazone        ': '[NX3][NX2]=[*]',
+            'Hydroxyl         ': '[OX2H]',
+            'Ketone           ': '[#6][CX3](=O)[#6]',
+            'Nitrile          ': '[NX1]#[CX2]',
+            'Primary amines   ': '[NH2,nH2]',
+            'Secondary amines ': '[NH1,nH1]',
+        }
+        res = {}
+        for group in list(FG.keys()):
+            res[group] = []
+
+        for sml in dataset_smiles:
+            mol = Chem.MolFromSmiles(sml)
+
+            for (group, SMARTS) in FG.items():
+                res[group].append(int(len(mol.GetSubstructMatches(Chem.MolFromSmarts(SMARTS))) > 0))
+
+        lines = ['Functional Group frequencies (percentage):\n']
+        for (group, _) in FG.items():
+            lines.append(group + ': {:.2f}'.format(np.array(res[group]).mean() * 100) + '\n')
+
+        return lines
+
     def QualityMetrics(self, mols, z, verbose=False):
         """
             Evaluates quality metrics for the generated molecules including validity, uniqueness, and novelty of the

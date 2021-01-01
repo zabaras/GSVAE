@@ -344,22 +344,30 @@ def main():
             pickle.dump(prp[str(i)], f)
         pickle.dump(scat_out, f)
 
+    props = {'Rings': [], 'SP3': [], 'PSA': [], 'MolWt': []}
+    for idx, sml in enumerate(smiles):
+        mol = Chem.MolFromSmiles(sml)
+        props['Rings'].append(Chem.rdMolDescriptors.CalcNumRings(mol))
+        props['SP3'].append(Chem.rdMolDescriptors.CalcFractionCSP3(mol))
+        props['PSA'].append(Descriptors.TPSA(mol))
+        props['MolWt'].append(Descriptors.MolWt(mol))
+
     # -- plot scattering latent space
     pca = PCA(n_components=2)
     latent_scat = pca.fit_transform(scat_out)
-    prop_name = ['Polar Surface Area', 'Molecular Weight', 'Octanol-Water Partition Coefficient']
-    prop_acrm = ['PSA', 'MolWt', 'LogP']
 
-    for i in range(3):
+    for idx, prp_ in enumerate(list(props.keys())):
         plt.figure(i)
         f, ax = plt.subplots()
-        ax.set_ylim([-0.6, 0.75])
-        ax.set_xlim([-0.5, 1.1])
+        plt.gca().set_aspect('equal', adjustable='box')
         ax.grid(ls='dashed')
         ax.set_axisbelow(True)
-        plt.scatter(latent_scat[:,0], latent_scat[:,1], c=prp[str(i)], s=5)
-        plt.title(prop_name[i])
-        plt.savefig(args.res_dir + '/latent_scat_' + prop_acrm[i], bbox_inches='tight')
+        if prp_ == 'Rings':
+            plt.scatter(latent_scat[:,0], latent_scat[:,1], c=props[prp_], s=5, vmin=0, vmax=4)
+        else:
+            plt.scatter(latent_scat[:,0], latent_scat[:,1], c=props[prp_], s=5)
+        plt.title(prp_)
+        plt.savefig(args.res_dir + '/latent_scat_' + prp_, bbox_inches='tight')
         plt.close()
 
 if __name__ == '__main__':

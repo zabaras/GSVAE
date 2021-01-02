@@ -189,8 +189,9 @@ def main():
     sig, adj, sample_z = model.get_samples(sample_name = '/samples_'+str(args.BB_samples)+'.data')
     if not bool(args.BB_samples):
         mols = chem.MolFromSample(sig, adj)
-        chem.draw(mols)
-        valid_mol, valid_z = chem.QualityMetrics(mols, sample_z, verbose=True)
+        if args.draw_mols:
+            chem.draw(mols)
+        valid_mol, valid_z = chem.QualityMetrics(mols, sample_z, adj, verbose=True)
 
         # -- plot property maps
         if not bool(args.y_target):

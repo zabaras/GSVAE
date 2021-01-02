@@ -113,7 +113,7 @@ N=200
 
 for i in `seq 1 ${ITR}`;
 do
-    python3 main.py --N "$N" --BB_samples "$i" --res "${DIR}"
+    python3 main.py --N "$N" --BB_samples "$i" --res results/"${DIR}"
 done
 
 mkdir data/samples

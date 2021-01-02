@@ -11,6 +11,7 @@ This implementation requires:
 
 * Python (>= 3.5)
 * SciPy (>= 1.4.1)
+* PyParsing (>= 1.1)
 * PyTorch (>= 1.5.0)
 * RDKit (>= 2019.09.3)
 * NumPy (>= 1.18.1)

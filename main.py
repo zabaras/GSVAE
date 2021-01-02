@@ -111,6 +111,22 @@ def check_args(args):
         sys.tracebacklimit = 0
         raise OSError('Training data not available. Run data_gen.py at ./data.')
 
+    if all([bool(i < 0) for i in args.reg_vec]):
+        sys.tracebacklimit = 0
+        raise ValueError('The regularization parameters only take positive values.')
+
+    if args.y_id not in [0, 1, 2, None]:
+        sys.tracebacklimit = 0
+        raise ValueError('Target property index takes the following values: 0: PSA, 1: MolWt, 2: LogP')
+
+    if any([bool(i != 0) for i in args.reg_vec]) and args.y_id is not None:
+        sys.tracebacklimit = 0
+        raise ValueError('Constrained conditional design not supported. This would become available in the future releases.')
+
+    if type(args.y_id) != type(args.y_target) and None in [args.y_id, args.y_target]:
+        sys.tracebacklimit = 0
+        raise ValueError('For conditional design, set both the target ID and target value.')
+
     if bool(args.gpu_mode) and not torch.cuda.is_available():
         print('No GPUs on this device! Running on CPU.')
 

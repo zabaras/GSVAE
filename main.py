@@ -16,31 +16,38 @@ def parse_args():
     desc = "PyTorch implementation of Molecular Graph Latent Space Discovery with adaptive wavelet graph Scattering VAE."
     parser = argparse.ArgumentParser(description=desc)
 
+    # -- training params
     parser.add_argument('--epochs', type=int, default=800, help='The number of epochs to run.')
-    parser.add_argument('--batch_size', type=int, default=32, help='The size of each batch.')
-    parser.add_argument('--gpu_mode', type=int, default=1, help='Accelerate the script using GPU.')
-    parser.add_argument('--z_dim', type=int, default=30, help='Latent space dimensionality')
-    parser.add_argument('--seed', type=int, default=1400, help='Random seed.')
-    parser.add_argument('--loadtrainedmodel', type=str, default='', help='Path to a trained model.')
-    parser.add_argument('--mu_reg_1', type=float, default=0., help='Regularization parameter for ghost nodes and valence constraint.')
-    parser.add_argument('--mu_reg_2', type=float, default=0., help='Regularization parameter for connectivity constraint.')
-    parser.add_argument('--N_vis', type=int, default=3000, help='Number of test data for visualization.')
-    parser.add_argument('--log_interval', type=int, default=200, help='Number of epochs between visualizations.')
-    parser.add_argument('--n_samples', type=int, default=10000, help='Number of generated samples from molecular space.')
-    parser.add_argument('--wlt_scales', type=int, default=8, help='Number of filters in the spectral domain.')
-    parser.add_argument('--scat_layers', type=int, default=3, help='Number of layers in the scattering network.')
+    parser.add_argument('--batch_number', type=int, default=25, help='The size of each batch.')
+    parser.add_argument('--N', type=int, default=600, help='Number of training data.')
     parser.add_argument('--database', type=str, default='QM9', help='Name of the training database.')
     parser.add_argument('--datafile', type=str, default='', help='Name of the training file.')
-    parser.add_argument('--BB_samples', type=int, default=0, help='Index for Bayesian bootstrap sample.')
-    parser.add_argument('--N', type=int, default=600, help='Number of training data.')
+    parser.add_argument('--gpu_mode', type=int, default=1, help='Accelerate the script using GPU.')
+    parser.add_argument('--seed', type=int, default=1400, help='Random seed.')
+    parser.add_argument('--loadtrainedmodel', type=str, default='', help='Path to a trained model.')
+
+    # -- model params
+    parser.add_argument('--z_dim', type=int, default=30, help='Latent space dimensionality')
+    parser.add_argument('--mu_reg_1', type=float, default=0., help='Regularization parameter for ghost nodes and valence constraint.')
+    parser.add_argument('--mu_reg_2', type=float, default=0., help='Regularization parameter for connectivity constraint.')
+    parser.add_argument('--mu_reg_3', type=float, default=0., help='Regularization parameter for 3-member cycle constraint.')
+    parser.add_argument('--mu_reg_4', type=float, default=0., help='Regularization parameter for cycle with triple bond constraint.')
+    parser.add_argument('--wlt_scales', type=int, default=8, help='Number of filters in the spectral domain.')
+    parser.add_argument('--scat_layers', type=int, default=3, help='Number of layers in the scattering network.')
+
+    # -- log params
     parser.add_argument('--res', type=str, default='results/', help='Path for storing the results.')
+    parser.add_argument('--log_interval', type=int, default=200, help='Number of epochs between visualizations.')
+    parser.add_argument('--N_vis', type=int, default=3000, help='Number of test data for visualization.')
+    parser.add_argument('--mol_vis', type=int, default=0, help='Visualize all generated molecules.')
+    parser.add_argument('--n_samples', type=int, default=10000, help='Number of generated samples from molecular space.')
+
+    # -- other functionalities
+    parser.add_argument('--BB_samples', type=int, default=0, help='Index for Bayesian bootstrap sample.')
+    parser.add_argument('--y_id', type=int, default=None, help='Index for target property in the conditional design.')
+    parser.add_argument('--y_target', type=float, default=None, help='Target property value in the conditional design.')
 
     args = parser.parse_args()
-
-    # -- scattering
-    args.sdim = 0
-    for l in range(args.scat_layers):
-        args.sdim += args.wlt_scales ** l
 
     # -- storage settings
     dir = os.getcwd()
@@ -49,12 +56,12 @@ def parse_args():
     os.makedirs(args.res_dir)
 
     args.vis = bool(args.log_interval)
+    args.draw_mols = bool(args.mol_vis)
 
     # -- dataset specification
-    if args.database == 'QM9':
-        args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
-        args.n_node = 9
-        args.n_atom_type = 5
+    args.atom_dict = {0: 'C', 1: 'O', 2: 'N', 3: 'F', 4: 'H'}
+    args.n_node = 9
+    args.n_atom_type = 5
 
     if args.datafile == '':
         args.data_dir = os.path.join(dir, 'data/' + args.database + '_0.data')
@@ -63,8 +70,21 @@ def parse_args():
 
     args.n_bond_type = 4
 
+    # -- scattering
+    args.sdim = 0
+    for l in range(args.scat_layers):
+        args.sdim += args.wlt_scales ** l
+
+    args.n_scat_atom_features = args.n_atom_type
+    if bool(args.y_target):
+        args.n_scat_atom_features = args.n_atom_type + 3
+
     # -- GPU settings
     args.device = torch.device('cuda' if (bool(args.gpu_mode) and torch.cuda.is_available()) else 'cpu')
+
+    args.reg_vec = [args.mu_reg_1, args.mu_reg_2, args.mu_reg_3, args.mu_reg_4]
+
+    args.batch_size = int(args.N / args.batch_number)
 
     return check_args(args)
 

@@ -193,8 +193,9 @@ def main():
         valid_mol, valid_z = chem.QualityMetrics(mols, sample_z, verbose=True)
 
         # -- plot property maps
-        chem.LatentMap()
-        chem.ChemSpace(valid_mol)
+        if not bool(args.y_target):
+            chem.LatentMap()
+            chem.ChemSpace(valid_mol)
 
 if __name__ == '__main__':
     main()

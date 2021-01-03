@@ -55,7 +55,7 @@ def parse_args():
     args.res_dir = os.path.join(dir, args.res, res_name)
     os.makedirs(args.res_dir)
 
-    args.vis = bool(args.log_interval)
+    args.vis = bool(args.log_interval) and not bool(args.BB_samples)
     args.draw_mols = bool(args.mol_vis)
 
     # -- dataset specification
@@ -187,7 +187,7 @@ def main():
 
     # -- sampling from trained model
     sig, adj, sample_z = model.get_samples(sample_name = '/samples_'+str(args.BB_samples)+'.data')
-    if not bool(args.BB_samples):
+    if args.vis:
         mols = chem.MolFromSample(sig, adj)
         if args.draw_mols:
             chem.draw(mols)

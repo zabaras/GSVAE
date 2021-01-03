@@ -26,6 +26,7 @@ class VAEgraph(object):
         self.log_interval = args.log_interval
         self.n_samples = args.n_samples
         self.vis = args.vis
+        self.BB = bool(args.BB_samples)
         self.mu_reg_1 = args.mu_reg_1
         self.mu_reg_2 = args.mu_reg_2
         self.mu_reg_3 = args.mu_reg_3
@@ -231,8 +232,8 @@ class VAEgraph(object):
 
                 if self.vis and epoch == self.epochs:
                     self.tools.pltLoss(self.train_hist, epoch)
-
-            torch.save(self.model, self.res_dir + model_name)
+            if not self.BB:
+                torch.save(self.model, self.res_dir + model_name)
 
         else:
             self.model = torch.load(self.filemodel + model_name)

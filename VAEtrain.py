@@ -239,7 +239,7 @@ class VAEgraph(object):
             self.model = torch.load(self.filemodel + model_name)
 
         if self.vis:
-            self.tools.visLatent(self.VisulDataset, self.model, self.epochs, TrainData=self.TrainDataset, EndPts=(14, 200))
+            self.tools.visLatent(self.VisulDataset, self.model, self.epochs, TrainData=self.TrainDataset)
         self.model.eval()
 
     def get_samples(self, sample_name='/samples.data'):

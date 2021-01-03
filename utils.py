@@ -79,14 +79,13 @@ class tools:
         self.chem = chemf(args)
         self.epochs = args.epochs
 
-    def visLatent(self, VisulData, model, epoch, TrainData=None, EndPts=None):
+    def visLatent(self, VisulData, model, epoch, TrainData=None):
         """
             Visualize the latent space.
         :param VisulData: visualizing dataset
         :param model: trained model
         :param epoch: current epoch
         :param TrainData: training dataset
-        :param EndPts: 2 molecules from visualizaton dataset which are used for interpolation
         :return: stores plots of latent space colored by different properties.
         """
 

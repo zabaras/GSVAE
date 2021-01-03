@@ -704,8 +704,8 @@ def parse_args():
 
     args = parser.parse_args()
 
-    args.scat_layers = args.n_samples = args.loadtrainedmodel = args.wlt_scales = args.mu_reg_1 = args.mu_reg_2 = \
-        args.z_dim = args.epochs = 0
+    args.reg_vec = [0]
+    args.scat_layers = args.n_samples = args.loadtrainedmodel = args.wlt_scales = args.z_dim = args.epochs = 0
 
     # -- scattering
     args.sdim = 0

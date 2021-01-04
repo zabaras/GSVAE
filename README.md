@@ -1,7 +1,11 @@
 Predictive Molecular Graph Latent Space Discovery
 ======================================
 
-This project is using Graph Scattering Variational AutoEncoder (GSVAE) to discovers a latent space for molecular graphs. A quantitative assessment of the latent space in terms of its predictive ability for organic molecules in the QM9 dataset is presented in the paper. All tests are performed with small sized training data. To account for the limited size training data set, a Bayesian formalism is considered that allows us capturing the uncertainties in the predicted properties.
+This repository contains a PyTorch implementation of Graph Scattering Variational AutoEncoder (GSVAE), a molecular generative model developed based on variational inference and graph theory. In this model, the encoding network is based on the scattering transform with adaptive spectral filters, which allows for better generalization of the model in the presence of limited training data. The decoding network is a one-shot graph generative model that conditions atom types on molecular topology.
+
+Physical constraints are implemented to encourage energetically stable and valid molecules.
+
+To account for the training with a limited-sized dataset, a Bayesian formalism is considered that allows capturing the uncertainties in the predictive estimates of the molecular properties.
 
 ## Getting Started
 

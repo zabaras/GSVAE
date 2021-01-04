@@ -222,18 +222,20 @@ class tools:
             props, bounds = self.chem.ChemProperty(mols)
             for i, (prop, bound) in enumerate(zip(props, bounds)):
 
-                # -- plot histogram for each set of samples
-                weights = np.ones_like(prop) / float(len(prop))
-                my_plot = plt.figure(12)
-                prob, bins, _ = plt.hist(prop, n_bins, bound, density=False, histtype='step', color='red', weights=weights)
-                plt.close(my_plot)
+                if i !=1:
 
-                # -- concatenate bin probabilities of each property for different sample sets
-                try:
-                    prob_all[str(i)] = np.concatenate(([prob_all[str(i)], prob.reshape(-1, 1)]), axis=1)
-                except:
-                    prob_all[str(i)] = prob.reshape(-1, 1)
-                    bins_all.append(bins)
+                    # -- plot histogram for each set of samples
+                    weights = np.ones_like(prop) / float(len(prop))
+                    my_plot = plt.figure(12)
+                    prob, bins, _ = plt.hist(prop, n_bins, bound, density=False, histtype='step', color='red', weights=weights)
+                    plt.close(my_plot)
+
+                    # -- concatenate bin probabilities of each property for different sample sets
+                    try:
+                        prob_all[str(i)] = np.concatenate(([prob_all[str(i)], prob.reshape(-1, 1)]), axis=1)
+                    except:
+                        prob_all[str(i)] = prob.reshape(-1, 1)
+                        bins_all.append(bins)
 
         return prob_all, bins_all, bounds
 

@@ -57,7 +57,7 @@ The model is trained using `main.py`. This code accepts the following arguments:
 ```bash
 optional arguments:
   --epochs              number of epochs to train (default: 800)
-  --batch_size          size of each batch (default: 32)
+  --batch_number        number of batches per epoch (default: 25)
   --gpu_mode            accelerate the script using GPU (default: 1)
   --z_dim               latent space dimensionality (default: 30)
   --seed                random seed (default: 1400)
@@ -68,6 +68,7 @@ optional arguments:
   --mu_reg_4            regularization parameter for cycle with triple bond constraint (default: 0)
   --N_vis               number of test data for visualization (default: 3000)
   --log_interval        number of epochs between visualizations (default: 200)
+  --mol_vis             visualize samples molecules (default: 0)
   --n_samples           number of generated samples from molecular space (default: 10000)
   --wlt_scales          number of wavelet scales (default: 8)
   --scat_layers         number of scattering layers (default: 3)

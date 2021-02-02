@@ -85,14 +85,16 @@ class VAEgraph(object):
         :return: regularization terms.
         """
 
+        SM_f = nn.Softmax(dim=2)
+        SM_W = nn.Softmax(dim=3)
+
+        p_f = SM_f(reg_sig)
+        p_W = SM_W(reg_adj)
+
+        ReLU = nn.ReLU()
+
         # -- Constraint: Ghost Nodes and Valence
         if self.reg_flag[0]:
-            SM_f = nn.Softmax(dim=2)
-            SM_W = nn.Softmax(dim=3)
-
-            p_f = SM_f(reg_sig)
-            p_W = SM_W(reg_adj)
-
             h_vec = torch.arange(self.n_bond_features, device=self.device).float()
             inner_sum = torch.einsum('i,bjki->bjk', h_vec, p_W)
             V = (inner_sum - torch.diag_embed(torch.einsum('...ii->...i', inner_sum))).sum(2)
@@ -100,9 +102,9 @@ class VAEgraph(object):
             valence_dict = torch.Tensor([4, 2, 3, 1, 0]).to(self.device)
             U = torch.einsum('k,bjk->bj', valence_dict, p_f)
 
-            reg_1 = torch.mean(torch.max(torch.zeros(U.size(), device=self.device), V - U).sum(1))
+            reg_1 = torch.sqrt(torch.mean(torch.sum(ReLU(V - U), 1).reshape(self.L, -1)**2, 0))
         else:
-            reg_1 = 0
+            reg_1 = torch.zeros(batch_dim//self.L, device=self.device)
 
         # -- Constraint: Connectivity
         if self.reg_flag[1]:
@@ -118,13 +120,15 @@ class VAEgraph(object):
             B = A_0.repeat(reg_sig.size(0), 1, 1).to(self.device)
 
             for i in range(1, self.n_node):
-                A_i = Sig(100 * (torch.bmm(A, A_i) - 0.5))
+                A_i = Sig(100 * (torch.bmm(A_i, A) - 0.5))
                 B += A_i
 
             C = Sig(100 * (B - 0.5))
-            reg_2 = 1. / batch_dim * torch.sum(torch.einsum('ij,ik,ijk->ijk', q, q, 1 - 2 * C) + C)
+
+            reg_2 = torch.sqrt(torch.mean(torch.sum(torch.triu(torch.einsum('ij,ik,ijk->ijk', q, q, 1 - 2 * C) + C,
+                                                               diagonal=1), (1, 2)).reshape(self.L, -1)**2, 0))
         else:
-            reg_2 = 0
+            reg_2 = torch.zeros(batch_dim//self.L, device=self.device)
 
         # -- Constraint: 3-member cycle
         if self.reg_flag[2]:
@@ -135,9 +139,9 @@ class VAEgraph(object):
             for i in range(2):
                 A_i = torch.bmm(A, A_i)
 
-            reg_3 = 1. / batch_dim * torch.sum(torch.einsum('bii->b', A_i) / 6.)
+            reg_3 = torch.sqrt(torch.mean((torch.einsum('bii->b', A_i) / 6.).reshape(self.L, -1)**2, 0))
         else:
-            reg_3 = 0
+            reg_3 = torch.zeros(batch_dim//self.L, device=self.device)
 
         # -- Constraint: Cycles with triple bonds
         if self.reg_flag[3]:
@@ -153,11 +157,12 @@ class VAEgraph(object):
                     B[:, i, j] = B[:, j, i] = 0
                     C[:, i, j] = C[:, j, i] = torch.inverse(nI - B)[:, i, j]
 
-            reg_4 = 1. / batch_dim * torch.sum(torch.einsum('bij,bij->bij', D, C))
+            reg_4 = torch.sqrt(torch.mean(torch.sum(torch.triu(torch.einsum('bij,bij->bij', D, C), diagonal=1),
+                                                    (1, 2)).reshape(self.L, -1)**2, 0))
         else:
-            reg_4 = 0
+            reg_4 = torch.zeros(batch_dim//self.L, device=self.device)
 
-        return [reg_1, reg_2, reg_3, reg_4]
+        return [self.L * reg_1, self.L * reg_2, self.L * reg_3, self.L * reg_4]
 
     def loss_function(self, recon_sig, recon_adj, weight_vec, signal, adj, reg_sig, reg_adj, mu, logvar):
 

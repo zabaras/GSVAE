@@ -84,7 +84,6 @@ def parse_args():
 
     # -- training parameter
     args.reg_vec = [args.mu_reg_1, args.mu_reg_2, args.mu_reg_3, args.mu_reg_4]
-
     args.batch_size = int(args.N / args.batch_number)
     args.L = 90//args.batch_size + 1
 
@@ -197,8 +196,8 @@ def main():
 
         # -- plot property maps
         if not bool(args.y_target):
-            chem.LatentMap()
             chem.ChemSpace(valid_mol)
+            chem.LatentMap()
 
 if __name__ == '__main__':
     main()

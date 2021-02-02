@@ -344,13 +344,14 @@ def main():
             pickle.dump(prp[str(i)], f)
         pickle.dump(scat_out, f)
 
-    props = {'Rings': [], 'SP3': [], 'PSA': [], 'MolWt': []}
+    props = {'Rings': [], 'SP3': [], 'PSA': [], 'MolWt': [], 'HBA':[]}
     for idx, sml in enumerate(smiles):
         mol = Chem.MolFromSmiles(sml)
         props['Rings'].append(Chem.rdMolDescriptors.CalcNumRings(mol))
         props['SP3'].append(Chem.rdMolDescriptors.CalcFractionCSP3(mol))
         props['PSA'].append(Descriptors.TPSA(mol))
         props['MolWt'].append(Descriptors.MolWt(mol))
+        props['HBA'].append(Chem.rdMolDescriptors.CalcNumHBA(mol))
 
     # -- plot scattering latent space
     pca = PCA(n_components=2)

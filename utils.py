@@ -110,6 +110,7 @@ class tools:
             N_train = len(TrainData.dataset)
             signal = torch.cat((signal, TrainData.dataset[:]['signal'].to(self.device)))
             adjacency = torch.cat((adjacency, TrainData.dataset[:]['adjacency'].to(self.device)))
+            properties = torch.cat((properties, TrainData.dataset[:]['properties'].to(self.device)))
 
         # -- encode inputs
         signal = signal.reshape(-1, self.n_max_atom, self.n_atom_features)
@@ -551,6 +552,7 @@ class chemf:
         prop_2 = []
         prop_3 = []
         for mol in mols:
+            mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol).replace('.[HH]', ''))
             prop_1.append(Descriptors.TPSA(mol))
             prop_2.append(Descriptors.MolWt(mol))
             prop_3.append(Crippen.MolLogP(mol))
@@ -776,7 +778,7 @@ def main():
 
         # -- quantiles
         if store_quant:
-            quant = np.quantile(prob_all[str(k)], [0.05, 0.95], axis=1)
+            quant = np.quantile(prob_all[str(k)], [0.01, 0.99], axis=1)
             quants.append(quant)
         else:
             quant = quants[k]

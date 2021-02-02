@@ -6,8 +6,9 @@ import pickle
 import numpy as np
 import torch.optim as optim
 
-from torch.utils.data import DataLoader
 from torch import nn
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
 
 from VAEmodel import VAEmod
 from utils import tools, MolecularGraphDataset as MGD
@@ -26,13 +27,12 @@ class VAEgraph(object):
         self.log_interval = args.log_interval
         self.n_samples = args.n_samples
         self.vis = args.vis
-        self.BB = bool(args.BB_samples)
         self.mu_reg_1 = args.mu_reg_1
         self.mu_reg_2 = args.mu_reg_2
         self.mu_reg_3 = args.mu_reg_3
         self.mu_reg_4 = args.mu_reg_4
-        self.mu_fcn = 70
         self.reg_flag = [bool(i != 0) for i in args.reg_vec]
+        self.L = args.L
 
         self.train_hist = {}
         for file in ['Tl', 'KL', 'RC', 'R1', 'R2', 'R3', 'R4']:
@@ -179,26 +179,28 @@ class VAEgraph(object):
 
         bnd_class_weights = None
         loss_adj = torch.nn.CrossEntropyLoss(weight=bnd_class_weights, reduction='none')
+
         fcn_loss_1 = loss_sig(output_sig, target_sig.long()).view(-1, self.n_node)
-
         fcn_loss_2 = loss_adj(output_adj, target_adj.long()).view(-1, self.n_node, self.n_node)
-        fcn_loss_2 = torch.triu(fcn_loss_2, diagonal=1)
 
-        fcn_loss = 1./ self.n_node * torch.mean(fcn_loss_1, 1) + 2 * self.n_node ** 2 / (self.n_node * (self.n_node - 1)) * torch.mean(fcn_loss_2, [1, 2])
+        fcn_loss = torch.sum(fcn_loss_1, 1) + torch.sum(torch.triu(fcn_loss_2, diagonal=1), (1, 2))
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
 
         [reg_1, reg_2, reg_3, reg_4] = self.constraints(reg_sig, reg_adj, batch_dim)
 
-        loss = self.N / batch_dim * (self.mu_fcn * torch.dot(fcn_loss, weight_vec) + torch.dot(KLD, weight_vec)) + \
-               (self.mu_reg_1 * reg_1 + self.mu_reg_2 * reg_2 + self.mu_reg_3 * reg_3 + self.mu_reg_4 * reg_4)
+        loss = self.N / batch_dim * (torch.dot(fcn_loss, weight_vec) + torch.dot(KLD, weight_vec) +
+                                     self.mu_reg_1 * torch.dot(reg_1, weight_vec[:batch_dim//self.L]) +
+                                     self.mu_reg_2 * torch.dot(reg_2, weight_vec[:batch_dim//self.L]) +
+                                     self.mu_reg_3 * torch.dot(reg_3, weight_vec[:batch_dim//self.L]) +
+                                     self.mu_reg_4 * torch.dot(reg_4, weight_vec[:batch_dim//self.L]))
 
         self.train_hist['Tl'].append(loss)
-        self.train_hist['RC'].append(self.N / batch_dim * self.mu_fcn * torch.dot(fcn_loss, weight_vec))
+        self.train_hist['RC'].append(self.N / batch_dim * torch.dot(fcn_loss, weight_vec))
         self.train_hist['KL'].append(self.N / batch_dim * torch.dot(KLD, weight_vec))
-        self.train_hist['R1'].append(self.mu_reg_1 * reg_1)
-        self.train_hist['R2'].append(self.mu_reg_2 * reg_2)
-        self.train_hist['R3'].append(self.mu_reg_3 * reg_3)
-        self.train_hist['R4'].append(self.mu_reg_4 * reg_4)
+        self.train_hist['R1'].append(self.N / batch_dim * self.mu_reg_1 * torch.dot(reg_1, weight_vec[:batch_dim//self.L]))
+        self.train_hist['R2'].append(self.N / batch_dim * self.mu_reg_2 * torch.dot(reg_2, weight_vec[:batch_dim//self.L]))
+        self.train_hist['R3'].append(self.N / batch_dim * self.mu_reg_3 * torch.dot(reg_3, weight_vec[:batch_dim//self.L]))
+        self.train_hist['R4'].append(self.N / batch_dim * self.mu_reg_4 * torch.dot(reg_4, weight_vec[:batch_dim//self.L]))
 
         return loss
 
@@ -209,9 +211,28 @@ class VAEgraph(object):
         for batch_idx, (train_batch, weight_vec) in enumerate(zip(self.TrainDataset, self.weights_loader)):
             train_batch['signal'] = train_batch['signal'].to(self.device)
             train_batch['adjacency'] = train_batch['adjacency'].to(self.device)
+
+            sig_aug = train_batch['signal'].clone()
+            adj_aug = train_batch['adjacency'].clone()
+            w_aug = weight_vec.clone()
+            for l in range(self.L - 1):
+                sig_aug = torch.cat((sig_aug, train_batch['signal']), 0)
+                adj_aug = torch.cat((adj_aug, train_batch['adjacency']), 0)
+                w_aug = torch.cat((w_aug, weight_vec), 0)
+
+            train_batch['signal'] = Variable(sig_aug)
+            train_batch['adjacency'] = Variable(adj_aug)
+            weight_vec = Variable(w_aug)
+
             props = None
             if self.cond_dsgn:
                 props = train_batch['properties'].to(self.device)
+
+                prp_aug = props.clone()
+                for l in range(self.L - 1):
+                    prp_aug = torch.cat((prp_aug, props), 0)
+
+                props = Variable(prp_aug)
 
             self.optimizer.zero_grad()
 
@@ -237,8 +258,8 @@ class VAEgraph(object):
 
                 if self.vis and epoch == self.epochs:
                     self.tools.pltLoss(self.train_hist, epoch)
-            if not self.BB:
-                torch.save(self.model, self.res_dir + model_name)
+
+            torch.save(self.model, self.res_dir + model_name)
 
         else:
             self.model = torch.load(self.filemodel + model_name)

@@ -82,9 +82,11 @@ def parse_args():
     # -- GPU settings
     args.device = torch.device('cuda' if (bool(args.gpu_mode) and torch.cuda.is_available()) else 'cpu')
 
+    # -- training parameter
     args.reg_vec = [args.mu_reg_1, args.mu_reg_2, args.mu_reg_3, args.mu_reg_4]
 
     args.batch_size = int(args.N / args.batch_number)
+    args.L = 90//args.batch_size + 1
 
     return check_args(args)
 

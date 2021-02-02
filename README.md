@@ -60,7 +60,7 @@ The model is trained using `main.py`. This code accepts the following arguments:
 
 ```bash
 optional arguments:
-  --epochs              number of epochs to train (default: 800)
+  --epochs              number of epochs to train (default: 1900)
   --batch_number        number of batches per epoch (default: 25)
   --gpu_mode            accelerate the script using GPU (default: 1)
   --z_dim               latent space dimensionality (default: 30)
@@ -74,8 +74,8 @@ optional arguments:
   --log_interval        number of epochs between visualizations (default: 200)
   --mol_vis             visualize samples molecules (default: 0)
   --n_samples           number of generated samples from molecular space (default: 10000)
-  --wlt_scales          number of wavelet scales (default: 8)
-  --scat_layers         number of scattering layers (default: 3)
+  --wlt_scales          number of wavelet scales (default: 12)
+  --scat_layers         number of scattering layers (default: 4)
   --database            name of the training database (default: 'QM9')
   --datafile            name and location of the training file in data folder (default: 'QM9_0.data')
   --BB_samples          index for Bayesian bootstrap sample (default: 0)
@@ -136,8 +136,8 @@ You can run `filter.py` independently in order to perform scattering transform a
 ```bash
 optional arguments:
   --gpu_mode            accelerate the script using GPU (default: 0)
-  --wlt_scales          number of wavelet scales (default: 8)
-  --scat_layers         number of scattering layers (default: 3)
+  --wlt_scales          number of wavelet scales (default: 12)
+  --scat_layers         number of scattering layers (default: 4)
   --N                   number of training data (default: 600)
   --database            name of the training database (default: 'QM9')
 ```

@@ -273,9 +273,9 @@ class VAEgraph(object):
                 cond_mu = np.transpose(mu1.T + np.matmul(cov12, np.linalg.inv(cov22)) * (y_target - mu2))[0]
                 cond_cov = cov11 - np.matmul(np.matmul(cov12, np.linalg.inv(cov22)), cov21)
 
-                sample_y = torch.empty(self.n_samples, 3)
+                sample_y = torch.empty(self.n_samples, 3, device=self.device)
                 sample_y[:, id1] = torch.distributions.multivariate_normal.MultivariateNormal(cond_mu, cond_cov).sample(
-                    (self.n_samples,))
+                    (self.n_samples,)).to(self.device)
                 sample_y[:, id2] = y_target
 
         if self.cond_dsgn:

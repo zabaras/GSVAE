@@ -333,7 +333,7 @@ def main():
             prp[str(i)] = torch.Tensor(pickle.load(f)[:N])
 
     signal_in = torch.transpose(signal.reshape(-1, args.n_node, args.n_scat_atom_features), 2, 1)
-    scat_out = scat(adjacency, signal_in).reshape(-1, args.sdim * args.n_scat_atom_features)
+    scat_out = scat(adjacency.to(args.device), signal_in.to(args.device)).reshape(-1, args.sdim * args.n_scat_atom_features)
 
     # -- store coefficients
     with open(args.res_dir + '/scat_out.data', 'wb') as f:
@@ -354,7 +354,7 @@ def main():
 
     # -- plot scattering latent space
     pca = PCA(n_components=2)
-    latent_scat = pca.fit_transform(scat_out)
+    latent_scat = pca.fit_transform(scat_out.cpu().detach().numpy())
 
     for idx, prp_ in enumerate(list(props.keys())):
         plt.figure(i)

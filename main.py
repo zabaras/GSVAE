@@ -17,7 +17,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
 
     # -- training params
-    parser.add_argument('--epochs', type=int, default=800, help='The number of epochs to run.')
+    parser.add_argument('--epochs', type=int, default=1900, help='The number of epochs to run.')
     parser.add_argument('--batch_number', type=int, default=25, help='The size of each batch.')
     parser.add_argument('--N', type=int, default=600, help='Number of training data.')
     parser.add_argument('--database', type=str, default='QM9', help='Name of the training database.')
@@ -32,8 +32,8 @@ def parse_args():
     parser.add_argument('--mu_reg_2', type=float, default=0., help='Regularization parameter for connectivity constraint.')
     parser.add_argument('--mu_reg_3', type=float, default=0., help='Regularization parameter for 3-member cycle constraint.')
     parser.add_argument('--mu_reg_4', type=float, default=0., help='Regularization parameter for cycle with triple bond constraint.')
-    parser.add_argument('--wlt_scales', type=int, default=8, help='Number of filters in the spectral domain.')
-    parser.add_argument('--scat_layers', type=int, default=3, help='Number of layers in the scattering network.')
+    parser.add_argument('--wlt_scales', type=int, default=12, help='Number of filters in the spectral domain.')
+    parser.add_argument('--scat_layers', type=int, default=4, help='Number of layers in the scattering network.')
 
     # -- log params
     parser.add_argument('--res', type=str, default='results/', help='Path for storing the results.')

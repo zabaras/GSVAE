@@ -225,8 +225,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description=desc)
 
     parser.add_argument('--gpu_mode', type=int, default=1, help='Accelerate the script using GPU.')
-    parser.add_argument('--wlt_scales', type=int, default=8, help='Number of filters in the spectral domain.')
-    parser.add_argument('--scat_layers', type=int, default=3, help='Number of layers in the scattering network.')
+    parser.add_argument('--wlt_scales', type=int, default=12, help='Number of filters in the spectral domain.')
+    parser.add_argument('--scat_layers', type=int, default=4, help='Number of layers in the scattering network.')
     parser.add_argument('--N', type=int, default=600, help='Number of training data.')
     parser.add_argument('--database', type=str, default='QM9', help='Training database name.')
 
@@ -323,7 +323,7 @@ def main():
     plt.close()
 
     # -- perform scattering transform
-    N = 80000
+    N = 5000
     prp = {}
     with open(args.data_dir, 'rb') as f:
         smiles = pickle.load(f)[:N]
